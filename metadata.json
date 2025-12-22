@@ -1,0 +1,5 @@
+{
+  "name": "Tech Lifecycle Tracker",
+  "description": "A professional tool to quickly find End of Life (EOL) and End of Support (EOS) dates for software and hardware products, powered by real-time search grounding.",
+  "requestFramePermissions": []
+}
