@@ -1,39 +1,39 @@
-
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { LifecycleResponse, GroundingSource } from "../types";
 
 export const searchLifecycleInfo = async (query: string): Promise<LifecycleResponse> => {
-  // Use a fresh instance to ensure the latest API key from environment is picked up
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+  // We create a fresh instance to ensure we use the latest key from the session/environment
+  const apiKey = process.env.API_KEY;
+  
+  if (!apiKey || apiKey === 'undefined') {
+    throw new Error("API Key is missing. Please click 'System Setup' to configure your environment.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   const model = "gemini-3-flash-preview";
   
   const systemInstruction = `
     You are an expert in IT Asset Management and Product Lifecycles. 
-    Your goal is to provide a comprehensive view of technology product lifecycles (software and hardware).
+    Your goal is to provide a comprehensive view of technology product lifecycles.
     
     CRITICAL REQUIREMENT:
-    You MUST provide a detailed historical table of versions.
-    Include as many past and current versions as possible to show the product's evolution.
+    Always include a clear Markdown table for version history.
+    Format: | Version | Release Date | End of Support (EOS) | End of Life (EOL) |
+    Ensure the table is continuous and uses standard Markdown syntax.
     
-    For each version, include:
-    1. Version Number/Name
-    2. Release Date (General Availability)
-    3. End of Support (EOS) / End of Mainstream Support
-    4. End of Life (EOL) / End of Extended Support
+    Structure your response:
+    - Heading: # [Product Name] Lifecycle Report
+    - Summary section.
+    - Detailed Version History Table.
+    - Migration Path / Recommendations.
     
-    Structure your response using Markdown:
-    - Heading: [Product Name] Lifecycle Overview
-    - Summary: Brief current status.
-    - Table: Detailed Version History with columns: Version | Release Date | EOS | EOL.
-    - Migration Path: Recommendations for moving from older versions to supported ones.
-    
-    Use the provided googleSearch tool to ensure the data is accurate and up-to-date.
+    Use the provided googleSearch tool for real-time accuracy.
   `;
 
   try {
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: model,
-      contents: `Provide a comprehensive version history and end-of-support timeline for: ${query}`,
+      contents: `Provide a detailed lifecycle and support audit for: ${query}`,
       config: {
         systemInstruction: systemInstruction,
         tools: [{ googleSearch: {} }],
@@ -41,8 +41,6 @@ export const searchLifecycleInfo = async (query: string): Promise<LifecycleRespo
     });
 
     const text = response.text || "No information found.";
-    
-    // Extract grounding sources from the response
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const sources: GroundingSource[] = groundingChunks
       .filter((chunk: any) => chunk.web)
@@ -56,8 +54,14 @@ export const searchLifecycleInfo = async (query: string): Promise<LifecycleRespo
       summary: text,
       sources: sources,
     };
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw new Error("Failed to retrieve lifecycle data. Please check your API key and network connection.");
+  } catch (error: any) {
+    console.error("Gemini API Error Detail:", error);
+    
+    // Check for common "Entity not found" error which often means model/key mismatch
+    if (error.message?.includes("not found")) {
+      throw new Error("The search service is currently unavailable for this model. Please try again or re-configure your API key.");
+    }
+    
+    throw new Error(error.message || "Failed to retrieve lifecycle data. Please check your network connection.");
   }
 };
