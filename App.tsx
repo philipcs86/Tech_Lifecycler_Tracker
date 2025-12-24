@@ -11,8 +11,8 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<SearchHistoryItem[]>([]);
   const [needsKey, setNeedsKey] = useState(false);
+  const [lastQuery, setLastQuery] = useState("");
 
-  // Check if API key is configured
   useEffect(() => {
     const checkKey = async () => {
       // @ts-ignore
@@ -47,6 +47,7 @@ const App: React.FC = () => {
   };
 
   const handleSearch = async (query: string) => {
+    setLastQuery(query);
     setIsLoading(true);
     setError(null);
     setResult(null);
@@ -60,10 +61,16 @@ const App: React.FC = () => {
       setHistory(updatedHistory);
       localStorage.setItem('lifecycle_history', JSON.stringify(updatedHistory));
     } catch (err: any) {
-      setError(err.message || "An unexpected error occurred.");
-      // If retrieval fails with "not found", it might be a key issue
-      if (err.message?.toLowerCase().includes("key") || err.message?.toLowerCase().includes("config")) {
+      if (err.message === "QUOTA_EXHAUSTED") {
+        setError("Search Quota Exceeded. The free tier limit for Google Search grounding has been reached.");
         setNeedsKey(true);
+      } else if (err.message === "API_KEY_MISSING") {
+        setError("Configuration Required: No API key found.");
+        setNeedsKey(true);
+      } else if (err.message === "MODEL_NOT_AVAILABLE") {
+        setError("The selected model is currently unavailable for this search tool.");
+      } else {
+        setError(err.message || "An unexpected error occurred.");
       }
     } finally {
       setIsLoading(false);
@@ -93,25 +100,25 @@ const App: React.FC = () => {
         </div>
 
         {needsKey && (
-          <div className="max-w-xl mx-auto mb-12 bg-[#0033a0] text-white p-8 rounded-3xl shadow-2xl border border-white/10 animate-in zoom-in-95 duration-500">
+          <div className="max-w-xl mx-auto mb-12 bg-amber-50 border border-amber-200 p-8 rounded-3xl shadow-xl animate-in zoom-in-95 duration-500">
             <div className="flex items-center gap-4 mb-4">
-              <div className="bg-white/20 p-3 rounded-xl">
-                <i className="fas fa-key text-xl"></i>
+              <div className="bg-amber-100 text-amber-700 p-3 rounded-xl">
+                <i className="fas fa-bolt text-xl"></i>
               </div>
-              <h3 className="text-xl font-black">System Setup Required</h3>
+              <h3 className="text-xl font-black text-amber-900">Personal API Key Recommended</h3>
             </div>
-            <p className="text-blue-100 mb-6 text-sm font-medium leading-relaxed">
-              To access real-time Google Search grounding for enterprise lifecycle data, you must select a valid API key from a paid Google Cloud project.
+            <p className="text-amber-800 mb-6 text-sm font-medium leading-relaxed">
+              The public shared key has reached its rate limit for Google Search grounding. To continue searching with higher reliability, please select your own API key from a paid Google Cloud project.
             </p>
             <button 
               onClick={handleOpenKey}
-              className="w-full bg-[#009444] hover:bg-[#007a37] text-white font-black py-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+              className="w-full bg-[#0033a0] hover:bg-[#002880] text-white font-black py-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
             >
-              Select API Key
-              <i className="fas fa-arrow-right text-xs"></i>
+              Configure My Own Key
+              <i className="fas fa-key text-xs"></i>
             </button>
-            <p className="text-[10px] text-blue-300 mt-4 text-center font-bold uppercase tracking-widest">
-              See <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="underline hover:text-white">Billing Documentation</a> for more info.
+            <p className="text-[10px] text-amber-600 mt-4 text-center font-bold uppercase tracking-widest">
+              See <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="underline hover:text-amber-800">Billing Documentation</a> for more info.
             </p>
           </div>
         )}
@@ -141,21 +148,21 @@ const App: React.FC = () => {
               <div className="bg-red-500 text-white p-4 rounded-xl shadow-lg">
                 <i className="fas fa-exclamation-circle text-2xl"></i>
               </div>
-              <div>
+              <div className="flex-1">
                 <h3 className="text-red-900 font-black text-xl mb-1">Retrieval Error</h3>
                 <p className="text-red-600 font-medium">{error}</p>
-                <div className="flex gap-4 mt-4">
+                <div className="flex gap-4 mt-6">
                   <button 
-                    onClick={() => setError(null)}
-                    className="text-xs font-black text-red-500 uppercase tracking-widest hover:underline"
+                    onClick={() => handleSearch(lastQuery)}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all"
                   >
-                    Dismiss
+                    Retry
                   </button>
                   <button 
-                    onClick={handleOpenKey}
-                    className="text-xs font-black text-blue-600 uppercase tracking-widest hover:underline"
+                    onClick={() => setError(null)}
+                    className="text-xs font-black text-red-500 uppercase tracking-widest hover:underline px-4 py-2"
                   >
-                    Update Key
+                    Dismiss
                   </button>
                 </div>
               </div>

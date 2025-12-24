@@ -2,11 +2,10 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { LifecycleResponse, GroundingSource } from "../types";
 
 export const searchLifecycleInfo = async (query: string): Promise<LifecycleResponse> => {
-  // We create a fresh instance to ensure we use the latest key from the session/environment
   const apiKey = process.env.API_KEY;
   
   if (!apiKey || apiKey === 'undefined') {
-    throw new Error("API Key is missing. Please click 'System Setup' to configure your environment.");
+    throw new Error("API_KEY_MISSING");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -57,11 +56,31 @@ export const searchLifecycleInfo = async (query: string): Promise<LifecycleRespo
   } catch (error: any) {
     console.error("Gemini API Error Detail:", error);
     
-    // Check for common "Entity not found" error which often means model/key mismatch
-    if (error.message?.includes("not found")) {
-      throw new Error("The search service is currently unavailable for this model. Please try again or re-configure your API key.");
+    let errorMessage = error.message || "";
+    
+    // Attempt to parse JSON error if it's a stringified object
+    try {
+      if (typeof errorMessage === 'string' && errorMessage.startsWith('{')) {
+        const parsed = JSON.parse(errorMessage);
+        if (parsed.error) {
+          if (parsed.error.code === 429) {
+            throw new Error("QUOTA_EXHAUSTED");
+          }
+          errorMessage = parsed.error.message;
+        }
+      }
+    } catch (e) {
+      // If parsing fails, just use the original message
+    }
+
+    if (errorMessage.includes("429") || errorMessage.toLowerCase().includes("quota")) {
+      throw new Error("QUOTA_EXHAUSTED");
     }
     
-    throw new Error(error.message || "Failed to retrieve lifecycle data. Please check your network connection.");
+    if (errorMessage.includes("not found")) {
+      throw new Error("MODEL_NOT_AVAILABLE");
+    }
+    
+    throw new Error(errorMessage || "Failed to retrieve lifecycle data. Please check your network connection.");
   }
 };
