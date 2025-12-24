@@ -2,9 +2,9 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { LifecycleResponse, GroundingSource } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-
 export const searchLifecycleInfo = async (query: string): Promise<LifecycleResponse> => {
+  // Use a fresh instance to ensure the latest API key from environment is picked up
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   const model = "gemini-3-flash-preview";
   
   const systemInstruction = `
@@ -21,13 +21,13 @@ export const searchLifecycleInfo = async (query: string): Promise<LifecycleRespo
     3. End of Support (EOS) / End of Mainstream Support
     4. End of Life (EOL) / End of Extended Support
     
-    Structure your response:
+    Structure your response using Markdown:
     - Heading: [Product Name] Lifecycle Overview
-    - Summary: Brief current status (e.g., "Version X is the current stable release, Version Y reached EOL on...")
-    - Table: Detailed Version History with all milestones.
+    - Summary: Brief current status.
+    - Table: Detailed Version History with columns: Version | Release Date | EOS | EOL.
     - Migration Path: Recommendations for moving from older versions to supported ones.
     
-    Use the provided search tools to ensure the data is accurate and up-to-date.
+    Use the provided googleSearch tool to ensure the data is accurate and up-to-date.
   `;
 
   try {
@@ -42,12 +42,12 @@ export const searchLifecycleInfo = async (query: string): Promise<LifecycleRespo
 
     const text = response.text || "No information found.";
     
-    // Extract grounding sources
+    // Extract grounding sources from the response
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const sources: GroundingSource[] = groundingChunks
       .filter((chunk: any) => chunk.web)
       .map((chunk: any) => ({
-        title: chunk.web.title || "Source",
+        title: chunk.web.title || "Source Reference",
         uri: chunk.web.uri || "#",
       }));
 
@@ -58,6 +58,6 @@ export const searchLifecycleInfo = async (query: string): Promise<LifecycleRespo
     };
   } catch (error) {
     console.error("Gemini API Error:", error);
-    throw new Error("Failed to retrieve lifecycle data. Please try again.");
+    throw new Error("Failed to retrieve lifecycle data. Please check your API key and network connection.");
   }
 };
