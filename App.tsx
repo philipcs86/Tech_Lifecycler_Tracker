@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import SearchBar from './components/SearchBar';
@@ -11,9 +10,22 @@ const App: React.FC = () => {
   const [result, setResult] = useState<LifecycleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<SearchHistoryItem[]>([]);
+  const [needsKey, setNeedsKey] = useState(false);
 
-  // Load history from local storage
+  // Check if API key is configured
   useEffect(() => {
+    const checkKey = async () => {
+      // @ts-ignore
+      if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+        // @ts-ignore
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        if (!hasKey && (!process.env.API_KEY || process.env.API_KEY === 'undefined')) {
+          setNeedsKey(true);
+        }
+      }
+    };
+    checkKey();
+    
     const saved = localStorage.getItem('lifecycle_history');
     if (saved) {
       try {
@@ -24,6 +36,16 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleOpenKey = async () => {
+    // @ts-ignore
+    if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
+      // @ts-ignore
+      await window.aistudio.openSelectKey();
+      setNeedsKey(false);
+      setError(null);
+    }
+  };
+
   const handleSearch = async (query: string) => {
     setIsLoading(true);
     setError(null);
@@ -33,13 +55,16 @@ const App: React.FC = () => {
       const data = await searchLifecycleInfo(query);
       setResult(data);
       
-      // Update history
       const newHistoryItem = { query, timestamp: Date.now() };
       const updatedHistory = [newHistoryItem, ...history.filter(h => h.query.toLowerCase() !== query.toLowerCase())].slice(0, 10);
       setHistory(updatedHistory);
       localStorage.setItem('lifecycle_history', JSON.stringify(updatedHistory));
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
+      // If retrieval fails with "not found", it might be a key issue
+      if (err.message?.toLowerCase().includes("key") || err.message?.toLowerCase().includes("config")) {
+        setNeedsKey(true);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -55,7 +80,6 @@ const App: React.FC = () => {
       <Header />
       
       <main className="flex-grow max-w-5xl mx-auto px-4 py-16 w-full">
-        {/* Hero Section */}
         <div className="text-center mb-16 space-y-6">
           <div className="inline-block bg-[#009444]/10 text-[#009444] px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-[0.2em] mb-4">
             Version History & Compliance
@@ -68,12 +92,34 @@ const App: React.FC = () => {
           </p>
         </div>
 
-        {/* Search Input Area */}
+        {needsKey && (
+          <div className="max-w-xl mx-auto mb-12 bg-[#0033a0] text-white p-8 rounded-3xl shadow-2xl border border-white/10 animate-in zoom-in-95 duration-500">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="bg-white/20 p-3 rounded-xl">
+                <i className="fas fa-key text-xl"></i>
+              </div>
+              <h3 className="text-xl font-black">System Setup Required</h3>
+            </div>
+            <p className="text-blue-100 mb-6 text-sm font-medium leading-relaxed">
+              To access real-time Google Search grounding for enterprise lifecycle data, you must select a valid API key from a paid Google Cloud project.
+            </p>
+            <button 
+              onClick={handleOpenKey}
+              className="w-full bg-[#009444] hover:bg-[#007a37] text-white font-black py-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+            >
+              Select API Key
+              <i className="fas fa-arrow-right text-xs"></i>
+            </button>
+            <p className="text-[10px] text-blue-300 mt-4 text-center font-bold uppercase tracking-widest">
+              See <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="underline hover:text-white">Billing Documentation</a> for more info.
+            </p>
+          </div>
+        )}
+
         <div className="mb-16">
           <SearchBar onSearch={handleSearch} isLoading={isLoading} />
         </div>
 
-        {/* Loading / Error / Results Area */}
         <div className="max-w-4xl mx-auto">
           {isLoading && (
             <div className="flex flex-col items-center justify-center py-24 space-y-6">
@@ -98,12 +144,20 @@ const App: React.FC = () => {
               <div>
                 <h3 className="text-red-900 font-black text-xl mb-1">Retrieval Error</h3>
                 <p className="text-red-600 font-medium">{error}</p>
-                <button 
-                  onClick={() => setError(null)}
-                  className="mt-4 text-xs font-black text-red-500 uppercase tracking-widest hover:underline"
-                >
-                  Dismiss
-                </button>
+                <div className="flex gap-4 mt-4">
+                  <button 
+                    onClick={() => setError(null)}
+                    className="text-xs font-black text-red-500 uppercase tracking-widest hover:underline"
+                  >
+                    Dismiss
+                  </button>
+                  <button 
+                    onClick={handleOpenKey}
+                    className="text-xs font-black text-blue-600 uppercase tracking-widest hover:underline"
+                  >
+                    Update Key
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -112,7 +166,6 @@ const App: React.FC = () => {
 
           {!result && !isLoading && !error && (
             <div className="grid md:grid-cols-2 gap-8 mt-12">
-              {/* Info Box */}
               <div className="bg-white p-10 rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/50 flex flex-col group hover:border-[#009444] transition-all duration-300">
                 <div className="h-14 w-14 bg-[#009444]/10 text-[#009444] rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform">
                   <i className="fas fa-shield-virus text-2xl"></i>
@@ -131,7 +184,6 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* History Box */}
               <div className="bg-white p-10 rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/50 flex flex-col">
                 <div className="flex items-center justify-between mb-8">
                   <div className="h-14 w-14 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center">
@@ -171,9 +223,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="bg-[#0033a0] text-blue-100 py-20 mt-20 relative overflow-hidden">
-        {/* Subtle decorative bar */}
         <div className="absolute top-0 left-0 w-full h-2 bg-[#009444]"></div>
-        
         <div className="max-w-5xl mx-auto px-4 grid md:grid-cols-3 gap-16 relative z-10">
           <div>
             <div className="flex items-center gap-2 mb-8">
